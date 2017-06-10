@@ -1,7 +1,9 @@
 var Market = artifacts.require("./Market.sol");
 var ReputationToken = artifacts.require("./ReputationToken.sol");
 
+/* simulates every offer lifecycle */
 contract('Market', function(accounts) {
+  // a set of constants for reuse in various tests
   const creator = accounts[0]
   const arbiter = accounts[1]
   const taker = accounts[2]
@@ -10,6 +12,7 @@ contract('Market', function(accounts) {
 
   let id = web3.toBigNumber(0)
 
+  // whitelists all accounts for the remaining tests
   it('should whitelist', async function() {
     let market = await Market.deployed();
     await market.setWhitelist(creator, true);
@@ -17,17 +20,22 @@ contract('Market', function(accounts) {
     await market.setWhitelist(taker, true);
   })
 
+  // adds an offer
   it('should addOffer', async function() {
+    // gets the Market instance deployed from Truffle
     let market = await Market.deployed();
+    // creates transaction and returns object with txHash, logs, etc.
     let { logs } = await market.addOffer(product, price, arbiter);
+    // event contains the name, args the arguments as a json object
     let { event, args } = logs[0];
     assert.equal(event, 'OfferAdded');
+    // price needs to be BigNumber for this equal check to work
     assert.deepEqual(args, {
       id,
       product,
       price
     });
-
+    
     let offer = await market.offers(0);
     assert.deepEqual(offer, [
       product,
@@ -39,6 +47,7 @@ contract('Market', function(accounts) {
     ]);
   })
 
+  // takes the offer
   it('should takeOffer', async function() {
     let market = await Market.deployed();
     let { logs } = await market.takeOffer(id, arbiter, {
@@ -52,6 +61,7 @@ contract('Market', function(accounts) {
     assert.deepEqual(web3.eth.getBalance(market.address), price);
   })
 
+  // confirms the offer
   it('should confirm', async function() {
     let market = await Market.deployed();
     let expected = web3.eth.getBalance(creator).plus(price);
@@ -67,6 +77,7 @@ contract('Market', function(accounts) {
     assert.deepEqual(await rep.balanceOf(creator), price);
   })
 
+  // helper function to make and then take an offer
   async function makeAndTake() {
     let market = await Market.deployed();
     id = id.plus(1);
@@ -74,6 +85,7 @@ contract('Market', function(accounts) {
     await market.takeOffer(id, arbiter, { from: taker, value: price });
   }
 
+  // tests arbiter resolution if delivered
   it('should resolve (delivered)', async function() {
     await makeAndTake()
     let market = await Market.deployed();
@@ -84,6 +96,7 @@ contract('Market', function(accounts) {
     assert.deepEqual(await rep.balanceOf(creator), price.times(2));
   })
 
+  // tests arbiter resolution if not delivered
   it('should resolve (not delivered, burned)', async function() {
     await makeAndTake()
     let market = await Market.deployed();
@@ -94,6 +107,7 @@ contract('Market', function(accounts) {
     assert.deepEqual(await rep.balanceOf(creator), price);
   })
 
+  // tests arbiter resolution if not delivered but without burning
   it('should resolve (not delivered, not burned)', async function() {
     await makeAndTake()
     let market = await Market.deployed();
